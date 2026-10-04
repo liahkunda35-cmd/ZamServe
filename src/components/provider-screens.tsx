@@ -178,9 +178,8 @@ export function ProviderHome() {
         </div>
       </header>
 
-      <section className="hero-3d dash-rise relative mt-5 h-[214px] overflow-hidden rounded-[28px] bg-[#f7f1e8]">
-        <img src="/images/provider-welcome.jpg?v=1" alt="" className="absolute inset-y-0 right-0 h-full w-[58%] object-cover object-[58%_center]" />
-        <span className="pointer-events-none absolute inset-y-0 right-[42%] w-16 bg-gradient-to-r from-[#f7f1e8] to-transparent" />
+      <section className="hero-3d dash-rise relative -mx-4 mt-5 h-[214px] overflow-hidden rounded-[28px] bg-[#f7f1e8]">
+        <img src="/images/provider-welcome.jpg?v=1" alt="" className="absolute inset-y-0 right-0 h-full w-[58%] object-cover object-[58%_center] [mask-image:linear-gradient(to_right,transparent,black_46%)] [-webkit-mask-image:linear-gradient(to_right,transparent,black_46%)]" />
         <div className="hero-copy relative z-10 flex h-full w-[50%] flex-col justify-center px-4 py-4">
           <p className="text-[15px] font-medium leading-snug text-[#5c4636]">Here&apos;s what&apos;s happening with your services today.</p>
           <div className="mt-3 w-fit rounded-full bg-[#e5f6ec] px-2.5 py-1">
