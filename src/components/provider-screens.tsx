@@ -252,16 +252,16 @@ export function ProviderHome() {
             })}
           </div>
           <div className="relative mt-5 overflow-hidden px-1 pb-2 pt-6">
-            <Wrench size={28} className="text-brown/70" />
+            <Wrench size={28} className="text-forest" />
             <p className="mt-2 font-display text-lg italic leading-tight text-brown">More services.<br />More opportunities.</p>
-            <span className="mt-1 block h-0.5 w-24 rounded-full bg-gold/80" />
-            <div className="pointer-events-none absolute -bottom-6 -right-6 h-24 w-40 rounded-[50%] bg-[#f3e6cf]" />
+            <span className="mt-1 block h-0.5 w-24 rounded-full bg-forest" />
+            <div className="pointer-events-none absolute -bottom-6 -right-6 h-24 w-40 rounded-[50%] bg-sage" />
             <div className="pointer-events-none absolute -bottom-10 right-8 h-20 w-36 rounded-[50%] bg-[#ead9bc]" />
           </div>
 
           <div className="mb-2 mt-6 flex items-end justify-between">
             <h2 className="font-display text-xl">New requests</h2>
-            <Link href="/provider/bookings?tab=requests" className="text-sm font-semibold text-brown">See all</Link>
+            <Link href="/provider/bookings?tab=requests" className="text-sm font-semibold text-forest">See all</Link>
           </div>
           {requests.length === 0 && <p className="text-sm text-muted">New requests appear here when a customer books one of your services.</p>}
           <div className="space-y-4">
@@ -324,20 +324,20 @@ export function ProviderHome() {
             </section>
           )}
 
-          <div className="mt-6 rounded-[22px] border border-line bg-card p-4 shadow-[0_8px_22px_rgba(74,49,32,0.05)]">
+          <div className="mt-6 rounded-[22px] border border-sage-line bg-card p-4 shadow-[0_8px_22px_rgba(74,49,32,0.05)]">
             <div className="flex items-end justify-between">
               <h2 className="font-display text-xl">Earnings</h2>
-              <Link href="/provider/earnings" className="text-sm font-semibold text-brown">View earnings</Link>
+              <Link href="/provider/earnings" className="text-sm font-semibold text-forest">View earnings</Link>
             </div>
             <p className="mt-2 text-xs text-muted">This week</p>
             <p className="font-display text-3xl">{kwacha(data.weekEarnings)}</p>
             <p className="text-sm text-muted">{data.weekJobs} completed {data.weekJobs === 1 ? "job" : "jobs"}</p>
           </div>
 
-          <div className="mt-3 rounded-[22px] border border-line bg-card p-4 shadow-[0_8px_22px_rgba(74,49,32,0.05)]">
+          <div className="mt-3 rounded-[22px] border border-sage-line bg-card p-4 shadow-[0_8px_22px_rgba(74,49,32,0.05)]">
             <div className="flex items-end justify-between">
               <h2 className="font-display text-xl">Recent reviews</h2>
-              <Link href="/provider/reviews" className="text-sm font-semibold text-brown">See all</Link>
+              <Link href="/provider/reviews" className="text-sm font-semibold text-forest">See all</Link>
             </div>
             <p className="mt-2 text-sm font-semibold">{data.rating.toFixed(1)} overall · {data.reviewCount} {data.reviewCount === 1 ? "review" : "reviews"}</p>
             <Stars value={data.rating} />
