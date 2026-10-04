@@ -5,9 +5,9 @@ import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { IdCard, UserRound } from "lucide-react";
 import { ApiError, api, uploadImage } from "@/lib/client";
-import { kwacha } from "@/lib/format";
 import type { Category } from "@/lib/types";
-import { ServiceChoices } from "./service-choices";
+import { adultDate, confirmPassword as passwordsMatch, emailAddress, imageFileProblem, nrcFileProblem, passwordValue, personName, phoneLocal, priceKwacha } from "@/lib/validate";
+import { Gate, useFormGate } from "./form-gate";
 import { BackLink, Banner, Button, Field, PasswordField, PhoneField, TextInput } from "./ui";
 
 type Draft = { categoryId: string; serviceId: string; newServiceName: string; price: string; description: string; durationMinutes: string };
@@ -40,7 +40,20 @@ export function ProviderRegister() {
   const [services, setServices] = useState<Draft[]>([]);
   const [portfolio, setPortfolio] = useState<string[]>([]);
   const [error, setError] = useState("");
+  const [nrcError, setNrcError] = useState("");
+  const [added, setAdded] = useState("");
   const [loading, setLoading] = useState(false);
+  const accountGate = useFormGate([
+    { id: "name", message: personName(fullName) },
+    { id: "email", message: emailAddress(email) },
+    { id: "phone", message: phoneLocal(phone) },
+    { id: "password", message: passwordValue(password) },
+    { id: "confirm", message: passwordsMatch(confirmPassword, password) },
+    { id: "dob", message: adultDate(dateOfBirth) },
+    { id: "nrc", message: nrcError || (nrcUrl ? "" : "Upload your NRC.") },
+    { id: "face", message: facePhotoUrl ? "" : "Take a profile photo." },
+  ]);
+  const priceGate = useFormGate(services.map((item) => ({ id: `price-${item.serviceId}`, message: priceKwacha(item.price) })));
 
   useEffect(() => {
     api<Category[]>("/api/categories").then(setCategories).catch(() => setError("Unable to load service categories."));
@@ -56,7 +69,15 @@ export function ProviderRegister() {
 
   async function uploadNrc(selected?: File) {
     if (!selected) return;
+    const problem = nrcFileProblem(selected);
+    if (problem) {
+      setNrcError(problem);
+      setNrcUrl(null);
+      setNrcName("");
+      return;
+    }
     try {
+      setNrcError("");
       const url = await uploadImage(selected, { private: true });
       setNrcUrl(url);
       setNrcName(selected.name);
@@ -73,18 +94,7 @@ export function ProviderRegister() {
   }
 
   function accountReady() {
-    if (fullName.trim().length < 2) return "Enter your full name.";
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) return "Enter a valid email address.";
-    const localPhone = phone.startsWith("0") ? phone.slice(1) : phone;
-    if (!/^\d{9}$/.test(localPhone)) return "Enter a valid Zambian phone number.";
-    if (password.length < 6) return "Use at least 6 characters for your password.";
-    if (password !== confirmPassword) return "Passwords do not match.";
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(dateOfBirth)) return "Enter your date of birth.";
-    const born = new Date(`${dateOfBirth}T00:00:00`);
-    const adult = new Date();
-    adult.setFullYear(adult.getFullYear() - 18);
-    if (Number.isNaN(born.getTime()) || born > adult) return "You need to be 18 or older.";
-    return "";
+    return accountGate.blockSubmit();
   }
 
   async function openCamera() {
@@ -164,22 +174,29 @@ export function ProviderRegister() {
     }
   }
 
-  function addService() {
-    if (!draft.categoryId || !draft.serviceId || !draft.price) {
-      setError("Choose a category, a service, and a price.");
+  function toggleService(serviceId: string) {
+    if (!draft.categoryId) return;
+    const exists = services.some((item) => item.serviceId === serviceId);
+    if (exists) {
+      setServices((current) => current.filter((item) => item.serviceId !== serviceId));
       return;
     }
-    if (services.some((item) => item.serviceId === draft.serviceId)) {
-      setError("That service is already on your list.");
-      return;
-    }
-    setServices((current) => [...current, draft]);
-    setDraft({ ...empty, categoryId: draft.categoryId });
+    setServices((current) => [...current, { ...empty, categoryId: draft.categoryId, serviceId, price: "" }]);
+    setAdded("The service has been added.");
     setError("");
+  }
+
+  function setServicePrice(serviceId: string, price: string) {
+    setServices((current) => current.map((item) => (item.serviceId === serviceId ? { ...item, price } : item)));
   }
 
   async function addPortfolio(selected?: File) {
     if (!selected || portfolio.length >= 2) return;
+    const problem = imageFileProblem(selected);
+    if (problem) {
+      setError(problem);
+      return;
+    }
     try {
       setPortfolio((current) => [...current, ""]);
       const url = await uploadImage(selected);
@@ -192,11 +209,16 @@ export function ProviderRegister() {
   }
 
   async function submit() {
-    const problem = accountReady();
-    if (problem || !nrcUrl || !facePhotoUrl || services.length === 0) {
-      setError(problem || "Finish verification and add at least one service.");
+    if (accountReady()) {
+      setStep(0);
       return;
     }
+    if (services.length === 0) {
+      setError("Select at least one service.");
+      return;
+    }
+    if (priceGate.blockSubmit()) return;
+    const offersBeauty = services.some((item) => categories.find((entry) => entry.id === item.categoryId)?.slug === "beauty-cosmetics");
     setLoading(true);
     setError("");
     try {
@@ -213,7 +235,7 @@ export function ProviderRegister() {
           serviceArea: "Lusaka",
           idDocumentUrl: nrcUrl,
           facePhotoUrl,
-          portfolio,
+          portfolio: offersBeauty ? portfolio.filter(Boolean) : [],
           services: services.map((item) => ({
             categoryId: item.categoryId,
             serviceId: item.serviceId || undefined,
@@ -239,26 +261,27 @@ export function ProviderRegister() {
     if (!section) return false;
     return service.section === section || service.section === "both";
   });
+  const offersBeauty = services.some((item) => categories.find((entry) => entry.id === item.categoryId)?.slug === "beauty-cosmetics");
 
   return (
     <div className="h-full overflow-y-auto px-6 py-8">
       <BackLink href="/choose-role" />
       <p className="mt-5 font-display text-3xl leading-none">Create Service Provider Account</p>
       <p className="mt-2 text-sm text-muted">Customers will meet you in person, so this account needs your details and a live photo.</p>
-      <div className="mt-4 flex gap-1">{[0, 1, 2].map((index) => <span key={index} className={`h-1.5 flex-1 rounded-full ${index <= step ? "bg-brown" : "bg-sand"}`} />)}</div>
-      {error && <div className="mt-4"><Banner>{error}</Banner></div>}
+      <div className="mt-4 flex gap-1">{[0, 1, 2].map((index) => <span key={index} className={`h-1.5 flex-1 rounded-full ${index <= step ? "bg-forest" : "bg-sand"}`} />)}</div>
+      {step === 0 && error && <div className="mt-4"><Banner>{error}</Banner></div>}
       {step === 0 && (
         <div className="mt-5 space-y-4">
-          <Field label="Full name"><TextInput value={fullName} onChange={(event) => setFullName(event.target.value)} /></Field>
-          <Field label="Email address"><TextInput value={email} onChange={(event) => setEmail(event.target.value)} inputMode="email" /></Field>
-          <Field label="Phone number"><PhoneField value={phone} onChange={setPhone} /></Field>
-          <Field label="Password"><PasswordField minLength={6} value={password} onChange={(event) => setPassword(event.target.value)} /></Field>
-          <Field label="Confirm password"><PasswordField mustMatch={password} value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} /></Field>
-          <Field label="Date of birth"><TextInput type="date" value={dateOfBirth} onChange={(event) => setDateOfBirth(event.target.value)} /></Field>
-          <div>
+          <Gate id="name" gate={accountGate}><Field label="Full name" error={accountGate.error("name")}><TextInput value={fullName} onChange={(event) => setFullName(event.target.value)} {...accountGate.input("name")} /></Field></Gate>
+          <Gate id="email" gate={accountGate}><Field label="Email address" error={accountGate.error("email")}><TextInput value={email} onChange={(event) => setEmail(event.target.value)} inputMode="email" {...accountGate.input("email")} /></Field></Gate>
+          <Gate id="phone" gate={accountGate}><Field label="Phone number" error={accountGate.error("phone")}><PhoneField value={phone} onChange={setPhone} {...accountGate.input("phone")} /></Field></Gate>
+          <Gate id="password" gate={accountGate}><Field label="Password" error={accountGate.error("password")}><PasswordField value={password} onChange={(event) => setPassword(event.target.value)} {...accountGate.input("password")} /></Field></Gate>
+          <Gate id="confirm" gate={accountGate}><Field label="Confirm password" error={accountGate.error("confirm")}><PasswordField value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} {...accountGate.input("confirm")} /></Field></Gate>
+          <Gate id="dob" gate={accountGate}><Field label="Date of birth" error={accountGate.error("dob")}><TextInput type="date" value={dateOfBirth} onChange={(event) => setDateOfBirth(event.target.value)} {...accountGate.input("dob")} /></Field></Gate>
+          <Gate id="nrc" gate={accountGate}>
             <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-gold">NRC</p>
             <label className="mt-1.5 flex min-h-[92px] cursor-pointer items-center gap-3 rounded-[22px] border border-line bg-card px-3.5 py-3 shadow-[0_8px_22px_rgba(111,75,50,0.07)]">
-              <span className="grid h-14 w-14 shrink-0 place-items-center rounded-2xl bg-gold-soft text-brown">
+              <span className="grid h-14 w-14 shrink-0 place-items-center rounded-2xl bg-sage text-forest">
                 {nrcPreview ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img src={nrcPreview} alt="" className="h-14 w-14 rounded-2xl object-cover" />
@@ -271,13 +294,14 @@ export function ProviderRegister() {
                 <span className="mt-0.5 block truncate text-xs text-muted">{nrcName || "One photo or PDF"}</span>
                 {nrcUrl && <span className="mt-1 block text-xs font-semibold text-success">Uploaded ✓</span>}
               </span>
-              <input type="file" accept="image/*,.pdf,application/pdf" className="sr-only" onChange={(event) => { uploadNrc(event.target.files?.[0]); event.target.value = ""; }} />
+              <input ref={accountGate.input("nrc").ref} type="file" accept="image/*,.pdf,application/pdf" className="sr-only" onChange={(event) => { uploadNrc(event.target.files?.[0]); event.target.value = ""; }} />
             </label>
-          </div>
-          <div>
+            {(nrcError || accountGate.error("nrc")) && <span className="mt-1 block text-xs text-danger">{nrcError || accountGate.error("nrc")}</span>}
+          </Gate>
+          <Gate id="face" gate={accountGate}>
             <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-gold">Profile Photo</p>
-            <button type="button" onClick={openCamera} className="mt-1.5 flex min-h-[92px] w-full items-center gap-3 rounded-[22px] border border-line bg-card px-3.5 py-3 text-left shadow-[0_8px_22px_rgba(111,75,50,0.07)]">
-              <span className="grid h-14 w-14 shrink-0 place-items-center overflow-hidden rounded-full bg-gold-soft text-brown">
+            <button type="button" ref={accountGate.input("face").ref} onClick={openCamera} className="mt-1.5 flex min-h-[92px] w-full items-center gap-3 rounded-[22px] border border-line bg-card px-3.5 py-3 text-left shadow-[0_8px_22px_rgba(111,75,50,0.07)]">
+              <span className="grid h-14 w-14 shrink-0 place-items-center overflow-hidden rounded-full bg-sage text-forest">
                 {facePreview ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img src={facePreview} alt="" className="h-14 w-14 object-cover" />
@@ -301,24 +325,23 @@ export function ProviderRegister() {
             {facePhotoUrl && !cameraOn && (
               <button type="button" className="mt-2 text-sm font-semibold text-brown underline" onClick={retakeFace}>Retake</button>
             )}
-          </div>
+            {accountGate.error("face") && <span className="mt-1 block text-xs text-danger">{accountGate.error("face")}</span>}
+          </Gate>
           <Button onClick={() => {
-            const problem = accountReady();
-            if (problem) setError(problem);
-            else if (!nrcUrl || !facePhotoUrl) setError("Upload your NRC and take a profile photo.");
-            else {
-              streamRef.current?.getTracks().forEach((track) => track.stop());
-              streamRef.current = null;
-              setCameraOn(false);
-              setError("");
-              setStep(1);
-            }
+            if (accountReady()) return;
+            streamRef.current?.getTracks().forEach((track) => track.stop());
+            streamRef.current = null;
+            setCameraOn(false);
+            setError("");
+            setStep(1);
           }}>Continue</Button>
         </div>
       )}
       {step === 1 && (
         <div className="mt-5 space-y-3">
-          <p className="text-[15px] font-medium text-[#3a2a22]">Choose every service you can do. Add as many as you offer. There is no limit. A new service can be added later from your provider account, and it is optional.</p>
+          <p className="text-[15px] font-medium text-[#3a2a22]">Select every service you offer. You can choose more than one, including services from different categories. Set a price for each one. You can change those prices later in the app.</p>
+          <p className="text-sm text-muted">Work photos are only asked for Beauty & Cosmetics. Repair and cleaning do not need photos.</p>
+          {added && <Banner tone="success">{added}</Banner>}
           <MenuSelect label="Category" value={draft.categoryId} onChange={(value) => { setSection(""); setDraft({ ...draft, categoryId: value, serviceId: "" }); }}>
             <option value="">Choose a category</option>
             {categories.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
@@ -331,34 +354,74 @@ export function ProviderRegister() {
             </MenuSelect>
           )}
           {category && (!beauty || section) && (
-            <MenuSelect label={beauty ? `Services under ${section === "barbershop" ? "Barbershop" : "Salon"}` : "Service"} value={draft.serviceId} onChange={(value) => setDraft({ ...draft, serviceId: value })}>
-              <option value="">Choose a service</option>
-              {beauty ? listed.map((service) => <option key={service.id} value={service.id}>{service.name}</option>) : <ServiceChoices services={category.services} />}
-            </MenuSelect>
+            <div className="space-y-2">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-gold">{beauty ? `Services under ${section === "barbershop" ? "Barbershop" : "Salon"}` : "Services"}</p>
+              {listed.map((service) => {
+                const selected = services.find((item) => item.serviceId === service.id);
+                return (
+                  <div key={service.id} className="rounded-2xl border border-line bg-card px-3 py-3">
+                    <label className="flex items-center gap-3 text-sm font-semibold">
+                      <input type="checkbox" checked={Boolean(selected)} onChange={() => toggleService(service.id)} className="h-4 w-4 accent-[#6f4b32]" />
+                      <span>{service.name}</span>
+                    </label>
+                    {selected && (
+                      <div className="mt-2">
+                        <Gate id={`price-${service.id}`} gate={priceGate}>
+                          <Field label="Price (K)" error={priceGate.error(`price-${service.id}`)}>
+                            <TextInput value={selected.price} onChange={(event) => setServicePrice(service.id, event.target.value.replace(/[^\d]/g, ""))} inputMode="numeric" {...priceGate.input(`price-${service.id}`)} />
+                          </Field>
+                        </Gate>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
           )}
-          <Field label="Price (K)"><TextInput value={draft.price} onChange={(event) => setDraft({ ...draft, price: event.target.value.replace(/[^\d]/g, "") })} inputMode="numeric" /></Field>
-          <Button variant="soft" type="button" onClick={addService}>Add this service</Button>
-          <div className="space-y-2">
-            {services.map((item, index) => (
-              <button key={`${item.serviceId}-${item.newServiceName}-${index}`} type="button" onClick={() => setServices((current) => current.filter((_, itemIndex) => itemIndex !== index))} className="flex w-full justify-between rounded-2xl border border-line bg-card px-3 py-2 text-left text-sm">
-                <span>✓ {item.newServiceName || categoryName(categories, item)}</span>
-                <span>{kwacha(Number(item.price))}</span>
-              </button>
-            ))}
-          </div>
+          {services.some((item) => !listed.some((service) => service.id === item.serviceId)) && (
+            <div className="space-y-2">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-gold">Also selected</p>
+              {services.filter((item) => !listed.some((service) => service.id === item.serviceId)).map((item) => (
+                <div key={item.serviceId} className="rounded-2xl border border-line bg-card px-3 py-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-sm font-semibold">{categoryName(categories, item)}</p>
+                    <button type="button" className="text-xs font-semibold text-danger" onClick={() => toggleService(item.serviceId)}>Remove</button>
+                  </div>
+                  <div className="mt-2">
+                    <Gate id={`price-${item.serviceId}`} gate={priceGate}>
+                      <Field label="Price (K)" error={priceGate.error(`price-${item.serviceId}`)}>
+                        <TextInput value={item.price} onChange={(event) => setServicePrice(item.serviceId, event.target.value.replace(/[^\d]/g, ""))} inputMode="numeric" {...priceGate.input(`price-${item.serviceId}`)} />
+                      </Field>
+                    </Gate>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+          {error && <Banner>{error}</Banner>}
           <div className="grid grid-cols-2 gap-2">
-            <Button variant="ghost" onClick={() => setStep(0)}>Back</Button>
-            <Button disabled={services.length === 0} onClick={() => { setError(""); setStep(2); }}>Continue</Button>
+            <Button variant="ghost" data-gate-back="true" onClick={() => setStep(0)}>Back</Button>
+            <Button loading={loading} onClick={() => {
+              if (services.length === 0) {
+                setError("Select at least one service.");
+                return;
+              }
+              if (priceGate.blockSubmit()) return;
+              setError("");
+              if (offersBeauty) setStep(2);
+              else submit();
+            }}>{offersBeauty ? "Continue" : "Submit"}</Button>
           </div>
         </div>
       )}
-      {step === 2 && (
+      {step === 2 && offersBeauty && (
         <div className="mt-5 space-y-4">
-          <p className="text-[15px] font-medium text-[#3a2a22]">Add up to 2 photos of your best work. You can replace them later from your account.</p>
+          <p className="text-[15px] font-medium text-[#3a2a22]">Add up to 2 photos of your beauty and cosmetics work. Repair and cleaning do not need photos.</p>
           {portfolio.length < 2 && <PickFile label="Add a work photo" onFile={addPortfolio} />}
           <div className="grid grid-cols-2 gap-2">
             {portfolio.map((url) => <img key={url} src={url} alt="" className="h-28 w-full rounded-2xl object-cover" />)}
           </div>
+          {error && <Banner>{error}</Banner>}
           <div className="grid grid-cols-2 gap-2">
             <Button variant="ghost" onClick={() => setStep(1)}>Back</Button>
             <Button loading={loading} onClick={submit}>Submit</Button>
@@ -367,7 +430,7 @@ export function ProviderRegister() {
       )}
       {step === 3 && (
         <div className="mt-5 space-y-3 rounded-[22px] border border-line bg-card p-4 text-sm">
-          {["Account information", "NRC uploaded", "Profile photo", "Services added", "Portfolio added"].map((label) => (
+          {["Account information", "NRC uploaded", "Profile photo", "Services added", ...(portfolio.length > 0 ? ["Work photos added"] : [])].map((label) => (
             <p key={label} className="font-semibold">{label} ✓</p>
           ))}
           <p className="pt-2 text-muted">Your provider profile is ready. Turn on Accepting jobs when you want requests.</p>

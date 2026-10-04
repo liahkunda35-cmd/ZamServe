@@ -40,7 +40,7 @@ function RoleCard({
           <span className="mt-0.5 block font-display text-[1.55rem] leading-none text-[#3a2a22]">{title}</span>
           <span className="mt-1.5 block text-[12px] leading-snug text-[#5c4636]">{body}</span>
         </span>
-        <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-[#c6a15b] text-white">
+        <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-forest text-white">
           <ChevronRight size={18} />
         </span>
       </div>
@@ -62,7 +62,7 @@ export default function ChooseRolePage() {
       <BackLink href="/" />
       <h1 className="mt-4 font-display text-[2.35rem] leading-none text-[#3a2a22]">Get Started</h1>
       <p className="mt-2 text-[15px] leading-snug text-[#5c4636]">
-        Choose how you want to use <span className="font-semibold text-[#6f4b32]">ZamServe</span>
+        Choose how you want to use <span className="font-semibold text-forest">ZamServe</span>
       </p>
       <div className="mt-5 grid gap-3">
         <RoleCard

@@ -16,7 +16,7 @@ export const POST = route(async (req) => {
   if (!user.customerProfile) throw new HttpError("You do not have access to this.", 403);
   const body = z
     .object({
-      provider: z.enum(["MTN", "Airtel", "Zamtel"]),
+      provider: z.enum(["Airtel Money", "MoMo", "Visa"]),
       phone: z.string(),
       label: z.string().max(40).optional(),
     })

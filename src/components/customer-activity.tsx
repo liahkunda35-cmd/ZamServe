@@ -4,7 +4,8 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { Phone } from "lucide-react";
 import { ApiError, api } from "@/lib/client";
-import { formatStamp, formatWhen, kwacha } from "@/lib/format";
+import { messageText, requiredText } from "@/lib/validate";
+import { formatDuration, formatStamp, formatWhen, kwacha } from "@/lib/format";
 import { STATUS_LABEL, canMessage, customerCanCancel, isActiveStatus } from "@/lib/statuses";
 import type { Booking, ChatMessage, Thread } from "@/lib/types";
 import dynamic from "next/dynamic";
@@ -32,7 +33,7 @@ export function CustomerBookings() {
       <h1 className="font-display text-[2rem]">My bookings</h1>
       <div className="mt-4 flex gap-2 overflow-x-auto">
         {tabs.map((item) => (
-          <button key={item.id} onClick={() => setTab(item.id)} className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-semibold ${tab === item.id ? "bg-brown text-white" : "bg-card border border-line"}`}>{item.label}</button>
+          <button key={item.id} onClick={() => setTab(item.id)} className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-semibold ${tab === item.id ? "bg-forest text-white" : "bg-card border border-line"}`}>{item.label}</button>
         ))}
       </div>
       {error && <div className="mt-4"><Banner>{error}</Banner></div>}
@@ -101,6 +102,11 @@ export function CustomerBookingDetail({ id }: { id: string }) {
   }, [booking?.providerLat, booking?.providerLng, booking?.latitude, booking?.longitude]);
 
   async function cancel() {
+    const reasonText = cancelChoice === "Other" ? requiredText(otherReason, 200, "Tell us why you are cancelling.", "Reason") : "";
+    if (reasonText) {
+      setError(reasonText);
+      return;
+    }
     try {
       const reason = cancelChoice === "Other" ? otherReason.trim() : cancelChoice;
       setBooking(await api<Booking>(`/api/bookings/${id}/cancel`, { method: "POST", body: JSON.stringify({ reason }) }));
@@ -111,6 +117,11 @@ export function CustomerBookingDetail({ id }: { id: string }) {
   }
 
   async function review() {
+    const problem = requiredText(comment, 500, "Share how the service went.", "Review");
+    if (problem) {
+      setError(problem);
+      return;
+    }
     try {
       const reason = rating <= 2 ? (reviewReason === "Other" ? comment.trim() : reviewReason) : undefined;
       setBooking(await api<Booking>("/api/reviews", { method: "POST", body: JSON.stringify({ bookingId: id, rating, reason, comment }) }));
@@ -152,7 +163,8 @@ export function CustomerBookingDetail({ id }: { id: string }) {
         <p className="mt-1 text-muted">{booking.addressLine}</p>
         <p className="mt-2 font-semibold text-brown">{booking.quotedPrice && booking.status === "PENDING" ? `Quoted price ${kwacha(booking.quotedPrice)}` : kwacha(booking.price)}</p>
         {booking.status === "PENDING" && !booking.quotedPrice && <p className="mt-2 text-muted">Waiting for the provider to confirm a price.</p>}
-        {booking.status === "ACCEPTED" && <p className="mt-2 font-semibold">Your service has been accepted.</p>}
+        {booking.status === "ACCEPTED" && <p className="mt-2 font-semibold">Provider found. {booking.provider.name} accepted {booking.service.name} for {kwacha(booking.price)}. Status: Accepted.</p>}
+        <p className="mt-1 text-muted">Duration: {formatDuration(booking.durationMinutes)}</p>
         {booking.paymentMethod && <p className="mt-1 text-muted">Payment: {booking.paymentMethod}</p>}
         {booking.notes && <p className="mt-2 text-muted">Notes: {booking.notes}</p>}
         {booking.cancellationReason && <p className="mt-2 text-danger">{booking.cancellationReason}</p>}
@@ -188,6 +200,7 @@ export function CustomerBookingDetail({ id }: { id: string }) {
             </select>
           )}
           <textarea value={comment} onChange={(event) => setComment(event.target.value)} placeholder={rating <= 2 ? "Tell us what went wrong" : "Share how the service went"} className="mt-3 h-24 w-full rounded-2xl border border-line p-3 text-sm outline-none" />
+          {error && <p className="mt-1 text-xs text-danger">{error}</p>}
           <div className="mt-3"><Button onClick={review}>Submit review</Button></div>
         </div>
       )}
@@ -197,6 +210,7 @@ export function CustomerBookingDetail({ id }: { id: string }) {
           {["Change of plans", "Booked by mistake", "Provider is late", "Found someone else", "Other"].map((item) => <option key={item}>{item}</option>)}
         </select>
         {cancelChoice === "Other" && <textarea value={otherReason} onChange={(event) => setOtherReason(event.target.value)} placeholder="Tell us why" className="mt-3 h-24 w-full rounded-2xl border border-line bg-card p-3 text-sm outline-none" />}
+        {cancelChoice === "Other" && error && <p className="mt-1 text-xs text-danger">{error}</p>}
         <div className="mt-3"><Button variant="danger" onClick={cancel}>Confirm cancellation</Button></div>
       </Modal>
     </Screen>
@@ -223,7 +237,7 @@ export function MessageList({ base }: { base: string }) {
             <span className="min-w-0 flex-1">
               <span className="flex items-center justify-between gap-2">
                 <span className="truncate font-semibold">{thread.name}</span>
-                {thread.unread > 0 && <span className="rounded-full bg-brown px-1.5 text-[10px] text-white">{thread.unread}</span>}
+                {thread.unread > 0 && <span className="rounded-full bg-forest px-1.5 text-[10px] text-white">{thread.unread}</span>}
               </span>
               <span className="block truncate text-xs text-muted">{thread.service} · {thread.lastMessage}</span>
             </span>
@@ -239,6 +253,7 @@ export function ChatThread({ bookingId, back }: { bookingId: string; back: strin
   const [title, setTitle] = useState("Messages");
   const [body, setBody] = useState("");
   const [error, setError] = useState("");
+  const [fieldError, setFieldError] = useState("");
 
   async function load() {
     const result = await api<{ booking: { providerName: string; customerName: string; service: string }; messages: ChatMessage[] }>(`/api/messages?bookingId=${bookingId}`);
@@ -254,7 +269,12 @@ export function ChatThread({ bookingId, back }: { bookingId: string; back: strin
 
   async function send(event: React.FormEvent) {
     event.preventDefault();
-    if (!body.trim()) return;
+    const problem = messageText(body);
+    if (problem) {
+      setFieldError(problem);
+      return;
+    }
+    setFieldError("");
     const text = body;
     setBody("");
     try {
@@ -275,15 +295,18 @@ export function ChatThread({ bookingId, back }: { bookingId: string; back: strin
       <div className="scroll-area flex-1 space-y-2 overflow-y-auto px-4 py-3">
         {error && <Banner>{error}</Banner>}
         {messages.map((message) => (
-          <div key={message.id} className={`max-w-[80%] rounded-2xl px-3 py-2 text-sm ${message.mine ? "ml-auto bg-brown text-white" : "bg-card border border-line"}`}>
+          <div key={message.id} className={`max-w-[80%] rounded-2xl px-3 py-2 text-sm ${message.mine ? "ml-auto bg-forest text-white" : "bg-card border border-line"}`}>
             <p>{message.body}</p>
             <p className={`mt-1 text-[10px] ${message.mine ? "text-white/70" : "text-muted"}`}>{formatStamp(message.createdAt)}{message.mine && message.readAt ? " · Read" : ""}</p>
           </div>
         ))}
       </div>
-      <form onSubmit={send} className="flex gap-2 border-t border-line p-3">
-        <input value={body} onChange={(event) => setBody(event.target.value)} placeholder="Write a message" className="h-11 flex-1 rounded-full border border-line bg-card px-4 text-sm outline-none" />
-        <button className="btn-3d btn-3d-cta h-11 rounded-full px-4 text-sm font-semibold text-white">Send</button>
+      <form onSubmit={send} className="border-t border-line p-3">
+        <div className="flex gap-2">
+          <input value={body} onChange={(event) => { setFieldError(""); setBody(event.target.value); }} placeholder="Write a message" className="h-11 flex-1 rounded-full border border-line bg-card px-4 text-sm outline-none" />
+          <button className="btn-3d btn-3d-cta h-11 rounded-full px-4 text-sm font-semibold text-white">Send</button>
+        </div>
+        {fieldError && <p className="mt-1 text-xs text-danger">{fieldError}</p>}
       </form>
     </div>
   );

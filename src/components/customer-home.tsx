@@ -1,13 +1,16 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { Bell, MapPin, Search } from "lucide-react";
 import { api } from "@/lib/client";
 import { firstName, greeting } from "@/lib/format";
+import { searchQuery } from "@/lib/validate";
 import type { Category, ProviderCard, ServiceItem } from "@/lib/types";
 import { useApp } from "./shell";
 import { ProviderCard as Card } from "./cards";
+import { Gate, useFormGate } from "./form-gate";
 import { Avatar, Banner, EmptyState, LoadingBlock, Screen, SectionTitle } from "./ui";
 
 type HomeData = {
@@ -18,11 +21,13 @@ type HomeData = {
 };
 
 export function CustomerHome() {
+  const router = useRouter();
   const { me } = useApp();
   const [data, setData] = useState<HomeData | null>(null);
   const [error, setError] = useState("");
   const [place, setPlace] = useState("Lusaka, Zambia");
   const [query, setQuery] = useState("");
+  const searchGate = useFormGate([{ id: "q", message: searchQuery(query) }]);
 
   useEffect(() => {
     let ignore = false;
@@ -76,31 +81,35 @@ export function CustomerHome() {
           <Link href="/customer/profile"><Avatar src={me.avatarUrl} name={me.fullName} size={42} /></Link>
         </div>
       </div>
-      <form action="/customer/search" className="mt-4 flex h-12 items-center gap-2 rounded-full border border-line bg-card px-4 shadow-[0_8px_20px_rgba(74,49,32,0.05)]">
-        <Search size={16} className="text-muted" />
-        <input name="q" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search for a service..." className="w-full bg-transparent text-sm outline-none" />
+      <form onSubmit={(event) => { event.preventDefault(); if (searchGate.blockSubmit()) return; router.push(`/customer/search?q=${encodeURIComponent(query.trim())}`); }} className="mt-4">
+        <Gate id="q" gate={searchGate}>
+          <div className="flex h-12 items-center gap-2 rounded-full border border-line bg-card px-4 shadow-[0_8px_20px_rgba(74,49,32,0.05)] focus-within:border-forest">
+            <Search size={16} className="text-forest" />
+            <input name="q" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search for a service..." className="w-full bg-transparent text-sm outline-none" {...searchGate.input("q")} />
+          </div>
+          {searchGate.error("q") && <span className="mt-1 block px-4 text-xs text-danger">{searchGate.error("q")}</span>}
+        </Gate>
       </form>
       {error && <div className="mt-4"><Banner>{error}</Banner></div>}
       {!data && !error && <div className="mt-5"><LoadingBlock label="Loading home..." /></div>}
       {data && (
         <div className="mt-5 space-y-6">
           {data.featured && (
-            <Link href={`/customer/categories/${data.featured.slug}`} className="press relative block min-h-[168px] overflow-hidden rounded-[28px] bg-[#f6ead8] shadow-[0_10px_24px_rgba(74,49,32,0.08)]">
+            <Link href={`/customer/categories/${data.featured.slug}`} className="press relative block h-[188px] overflow-hidden rounded-[28px] shadow-[0_10px_24px_rgba(74,49,32,0.08)]">
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src="/images/home-feature.jpg" alt="" className="absolute inset-y-0 right-0 h-full w-[56%] object-cover object-[center_8%]" />
-              <div className="pointer-events-none absolute inset-y-0 right-[40%] w-14 bg-gradient-to-r from-[#f6ead8] to-transparent" />
-              <div className="relative flex min-h-[168px] w-[48%] flex-col justify-between p-4 sm:p-5">
-                <p className="flex items-center gap-1 text-[11px] font-medium text-[#6f4b32]"><MapPin size={12} /> {place}</p>
+              <img src="/images/dashboard-hero.jpg?v=1" alt="" className="absolute inset-0 h-full w-full object-cover object-center" />
+              <div className="relative flex h-full w-[52%] flex-col justify-between p-4 sm:p-5">
+                <p className="flex items-center gap-1 text-[11px] font-medium text-[#6f4b32]"><MapPin size={12} className="text-forest" /> {place}</p>
                 <p className="font-display text-[1.55rem] leading-[1.05] text-[#3a2a1c] sm:text-[1.75rem]">Quality service near you</p>
                 <span className="btn-3d btn-3d-cta mt-3 inline-flex h-9 w-fit items-center rounded-full px-4 text-xs font-semibold text-white">Book now</span>
               </div>
             </Link>
           )}
           <section>
-            <SectionTitle title="Service categories" action={<Link href="/customer/categories" className="text-xs font-semibold text-brown">See all</Link>} />
+            <SectionTitle title="Service categories" action={<Link href="/customer/categories" className="text-xs font-semibold text-forest">See all</Link>} />
             <div className="grid grid-cols-3 gap-2 sm:gap-3">
               {data.categories.map((category, index) => (
-                <Link key={category.id} href={`/customer/categories/${category.slug}`} className="card-in press flex min-h-[148px] flex-col items-center justify-between rounded-[22px] border border-line bg-card px-2 py-3 text-center shadow-[0_8px_18px_rgba(74,49,32,0.05)]" style={{ animationDelay: `${index * 70}ms` }}>
+                <Link key={category.id} href={`/customer/categories/${category.slug}`} className="card-in press flex min-h-[148px] flex-col items-center justify-between rounded-[22px] border border-sage-line bg-card px-2 py-3 text-center shadow-[0_8px_18px_rgba(74,49,32,0.05)]" style={{ animationDelay: `${index * 70}ms` }}>
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img src={categoryIcon(category.slug)} alt="" className="h-20 w-full object-contain sm:h-24" />
                   <span className="mt-1 text-[11px] font-semibold leading-tight text-ink sm:text-xs">{category.name}</span>
@@ -113,7 +122,7 @@ export function CustomerHome() {
               <SectionTitle title="Popular services" />
               <div className="flex gap-2 overflow-x-auto pb-1">
                 {data.popularServices.map((service) => (
-                  <Link key={service.id} href={`/customer/search?service=${service.slug}`} className="press shrink-0 rounded-full bg-card px-3 py-2 text-xs font-semibold text-brown border border-line">
+                  <Link key={service.id} href={`/customer/search?service=${service.slug}`} className="press shrink-0 rounded-full border border-sage-line bg-card px-3 py-2 text-xs font-semibold text-brown">
                     {service.name}
                   </Link>
                 ))}

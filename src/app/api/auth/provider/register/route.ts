@@ -3,6 +3,7 @@ import { route, ok, readJson, HttpError } from "@/lib/http";
 import { normalizePhone } from "@/lib/phone";
 import { registerProvider } from "@/lib/account";
 import { setSession } from "@/lib/auth";
+import { emailAddress } from "@/lib/validate";
 
 export const dynamic = "force-dynamic";
 
@@ -12,7 +13,7 @@ const service = z.object({
   newServiceName: z.string().optional(),
   price: z.number().int().positive("Enter a price in kwacha."),
   description: z.string().max(400).optional(),
-  durationMinutes: z.number().int().min(15).max(480).optional(),
+  durationMinutes: z.number().int().min(15).max(24 * 60).optional(),
 });
 
 const schema = z.object({
@@ -20,7 +21,7 @@ const schema = z.object({
   phone: z.string().min(1, "Enter your phone number."),
   password: z.string().min(6, "Use at least 6 characters."),
   confirmPassword: z.string(),
-  email: z.string().trim().email("Enter a valid email address."),
+  email: z.string().trim().refine((value) => emailAddress(value) === "", "Please enter a valid email address."),
   dateOfBirth: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Enter a valid date of birth."),
   avatarUrl: z.string().optional().nullable(),
   businessName: z.string().trim().min(2).max(80),

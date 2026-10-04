@@ -22,7 +22,7 @@ export const POST = route(async (req) => {
       latitude: z.number().optional().nullable(),
       longitude: z.number().optional().nullable(),
       notes: z.string().max(500).optional(),
-      paymentMethod: z.string().min(2, "Choose a payment method.").max(40),
+      paymentMethod: z.string().min(2, "Choose a payment method.").max(80),
       saveAddress: z.boolean().optional(),
       addressLabel: z.string().max(40).optional(),
     })

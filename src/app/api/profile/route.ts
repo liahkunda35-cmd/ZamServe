@@ -1,9 +1,8 @@
 import { z } from "zod";
 import { route, ok, readJson } from "@/lib/http";
 import { requireUser, unreadCounts } from "@/lib/auth";
-import { updateProfile } from "@/lib/account";
+import { loadAccount, updateProfile } from "@/lib/account";
 import { toMe } from "@/lib/serializers";
-import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
 
@@ -22,10 +21,7 @@ export const PATCH = route(async (req) => {
     })
     .parse(await readJson(req));
   await updateProfile(user.id, body);
-  const fresh = await prisma.user.findUniqueOrThrow({
-    where: { id: user.id },
-    include: { customerProfile: true, providerProfile: true },
-  });
+  const fresh = await loadAccount(user.id);
   const profileId = fresh.role === "CUSTOMER" ? fresh.customerProfile?.id : fresh.providerProfile?.id;
   return ok(toMe(fresh, await unreadCounts(fresh.id, fresh.role, profileId)));
 });

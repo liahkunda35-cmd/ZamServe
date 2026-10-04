@@ -4,6 +4,8 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useState } from "react";
 import { ApiError, api, uploadImage } from "@/lib/client";
+import { confirmPassword as passwordsMatch, imageFileProblem, passwordValue, personName, phoneLocal, resetCode } from "@/lib/validate";
+import { Gate, useFormGate } from "./form-gate";
 import { BackLink, Banner, Button, Field, PasswordField, PhoneField, TextInput } from "./ui";
 
 export function LoginScreen({ role }: { role: "CUSTOMER" | "PROVIDER" }) {
@@ -13,9 +15,14 @@ export function LoginScreen({ role }: { role: "CUSTOMER" | "PROVIDER" }) {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const home = role === "CUSTOMER" ? "/customer/home" : "/provider/home";
+  const gate = useFormGate([
+    { id: "phone", message: phoneLocal(phone) },
+    { id: "password", message: passwordValue(password) },
+  ]);
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
+    if (gate.blockSubmit()) return;
     setLoading(true);
     setError("");
     try {
@@ -38,8 +45,8 @@ export function LoginScreen({ role }: { role: "CUSTOMER" | "PROVIDER" }) {
       <p className="mt-2 text-sm text-muted">{role === "CUSTOMER" ? "Log in to book a service." : "Log in to manage jobs and requests."}</p>
       <form onSubmit={submit} className="mt-6 space-y-4">
         {error && <Banner>{error}</Banner>}
-        <Field label="Phone number"><PhoneField value={phone} onChange={setPhone} /></Field>
-        <Field label="Password"><PasswordField value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Password" /></Field>
+        <Gate id="phone" gate={gate}><Field label="Phone number" error={gate.error("phone")}><PhoneField value={phone} onChange={setPhone} {...gate.input("phone")} /></Field></Gate>
+        <Gate id="password" gate={gate}><Field label="Password" error={gate.error("password")}><PasswordField value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Password" {...gate.input("password")} /></Field></Gate>
         <div className="text-right">
           <Link href={role === "CUSTOMER" ? "/customer/forgot" : "/provider/forgot"} className="link-blue text-sm font-semibold">Forgot password?</Link>
         </div>
@@ -61,19 +68,35 @@ export function CustomerRegister() {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [error, setError] = useState("");
+  const [photoError, setPhotoError] = useState("");
   const [loading, setLoading] = useState(false);
+  const gate = useFormGate([
+    { id: "name", message: personName(fullName) },
+    { id: "phone", message: phoneLocal(phone) },
+    { id: "password", message: passwordValue(password) },
+    { id: "confirm", message: passwordsMatch(confirmPassword, password) },
+    { id: "photo", message: photoError },
+  ]);
 
   async function onFile(file?: File) {
     if (!file) return;
+    const problem = imageFileProblem(file);
+    if (problem) {
+      setPhotoError(problem);
+      setAvatarUrl(null);
+      return;
+    }
     try {
+      setPhotoError("");
       setAvatarUrl(await uploadImage(file));
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Unable to upload that photo.");
+      setPhotoError(err instanceof ApiError ? err.message : "Unable to upload that photo.");
     }
   }
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
+    if (gate.blockSubmit()) return;
     setLoading(true);
     setError("");
     try {
@@ -96,14 +119,17 @@ export function CustomerRegister() {
       <p className="mt-2 text-sm text-muted">Book beauty, repairs, and cleaning. You can add a location when you book.</p>
       <form onSubmit={submit} className="mt-6 space-y-4">
         {error && <Banner>{error}</Banner>}
-        <Field label="Full name"><TextInput value={fullName} onChange={(event) => setFullName(event.target.value)} placeholder="Your full name" /></Field>
-        <Field label="Phone number"><PhoneField value={phone} onChange={setPhone} /></Field>
-        <Field label="Password"><PasswordField minLength={6} value={password} onChange={(event) => setPassword(event.target.value)} placeholder="At least 6 characters" /></Field>
-        <Field label="Confirm password"><PasswordField mustMatch={password} value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} placeholder="Repeat password" /></Field>
-        <label className="btn-3d btn-3d-light flex h-12 cursor-pointer items-center justify-center rounded-full text-sm font-semibold text-[#4a3120]">
-          {avatarUrl ? "Profile photo added ✓" : "Add a profile photo, optional"}
-          <input type="file" accept="image/*" className="sr-only" onChange={(event) => onFile(event.target.files?.[0])} />
-        </label>
+        <Gate id="name" gate={gate}><Field label="Full name" error={gate.error("name")}><TextInput value={fullName} onChange={(event) => setFullName(event.target.value)} placeholder="Your full name" {...gate.input("name")} /></Field></Gate>
+        <Gate id="phone" gate={gate}><Field label="Phone number" error={gate.error("phone")}><PhoneField value={phone} onChange={setPhone} {...gate.input("phone")} /></Field></Gate>
+        <Gate id="password" gate={gate}><Field label="Password" error={gate.error("password")}><PasswordField value={password} onChange={(event) => setPassword(event.target.value)} placeholder="At least 6 characters" {...gate.input("password")} /></Field></Gate>
+        <Gate id="confirm" gate={gate}><Field label="Confirm password" error={gate.error("confirm")}><PasswordField value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} placeholder="Repeat password" {...gate.input("confirm")} /></Field></Gate>
+        <Gate id="photo" gate={gate}>
+          <label className="btn-3d btn-3d-light flex h-12 cursor-pointer items-center justify-center rounded-full text-sm font-semibold text-[#4a3120]">
+            {avatarUrl ? "Profile photo added ✓" : "Add a profile photo, optional"}
+            <input type="file" accept="image/jpeg,image/png,image/webp" className="sr-only" onChange={(event) => { onFile(event.target.files?.[0]); event.target.value = ""; }} />
+          </label>
+          {(photoError || gate.error("photo")) && <span className="mt-1 block text-xs text-danger">{photoError || gate.error("photo")}</span>}
+        </Gate>
         {avatarUrl && <img src={avatarUrl} alt="" className="h-16 w-16 rounded-full object-cover" />}
         <Button type="submit" loading={loading}>Sign up</Button>
       </form>
@@ -125,9 +151,15 @@ export function ForgotScreen() {
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const phoneGate = useFormGate([{ id: "phone", message: phoneLocal(phone) }]);
+  const resetGate = useFormGate([
+    { id: "code", message: resetCode(code) },
+    { id: "password", message: passwordValue(password) },
+  ]);
 
   async function requestCode(event: React.FormEvent) {
     event.preventDefault();
+    if (phoneGate.blockSubmit()) return;
     setLoading(true);
     setError("");
     try {
@@ -147,6 +179,7 @@ export function ForgotScreen() {
 
   async function reset(event: React.FormEvent) {
     event.preventDefault();
+    if (resetGate.blockSubmit()) return;
     setLoading(true);
     setError("");
     try {
@@ -175,13 +208,13 @@ export function ForgotScreen() {
       {devCode && <div className="mt-3"><Banner tone="info">Local development code: {devCode}</Banner></div>}
       {step === 1 ? (
         <form onSubmit={requestCode} className="mt-6 space-y-4">
-          <Field label="Phone number"><PhoneField value={phone} onChange={setPhone} /></Field>
+          <Gate id="phone" gate={phoneGate}><Field label="Phone number" error={phoneGate.error("phone")}><PhoneField value={phone} onChange={setPhone} {...phoneGate.input("phone")} /></Field></Gate>
           <Button type="submit" loading={loading}>Send code</Button>
         </form>
       ) : (
         <form onSubmit={reset} className="mt-6 space-y-4">
-          <Field label="Reset code"><TextInput value={code} onChange={(event) => setCode(event.target.value)} placeholder="6-digit code" /></Field>
-          <Field label="New password"><PasswordField value={password} onChange={(event) => setPassword(event.target.value)} /></Field>
+          <Gate id="code" gate={resetGate}><Field label="Reset code" error={resetGate.error("code")}><TextInput value={code} onChange={(event) => setCode(event.target.value.replace(/\D/g, "").slice(0, 6))} inputMode="numeric" placeholder="6-digit code" {...resetGate.input("code")} /></Field></Gate>
+          <Gate id="password" gate={resetGate}><Field label="New password" error={resetGate.error("password")}><PasswordField value={password} onChange={(event) => setPassword(event.target.value)} {...resetGate.input("password")} /></Field></Gate>
           <Button type="submit" loading={loading}>Update password</Button>
         </form>
       )}

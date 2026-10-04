@@ -132,11 +132,13 @@ export function toBooking(
     providerLocationAt: booking.providerLocationAt?.toISOString() ?? null,
     completedAt: booking.completedAt?.toISOString() ?? null,
     createdAt: booking.createdAt.toISOString(),
+    durationMinutes: booking.providerService?.durationMinutes ?? 60,
     service: {
       id: booking.service.id,
       name: booking.service.name,
       slug: booking.service.slug,
       category: booking.service.category.name,
+      categorySlug: booking.service.category.slug,
     },
     provider: {
       id: booking.provider.id,

@@ -11,6 +11,11 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
   return (
     <html lang="en">
       <body className="antialiased">
+        <script
+          dangerouslySetInnerHTML={{
+            __html: "try{if(localStorage.getItem('zam-theme')==='dark')document.documentElement.dataset.theme='dark'}catch(e){}",
+          }}
+        />
         <div className="app-stage">
           <div className="app-frame flex flex-col">
             <AppHeader />

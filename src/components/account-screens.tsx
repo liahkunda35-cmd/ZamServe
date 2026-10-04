@@ -7,9 +7,11 @@ import { Bell, CalendarDays, ChevronRight, CircleHelp, Heart, LogOut, MapPin, Se
 import { ApiError, api, uploadImage } from "@/lib/client";
 import { formatPhone } from "@/lib/phone";
 import type { ProviderCard } from "@/lib/types";
+import { imageFileProblem, personName, phoneLocal, requiredText, visaLast4 } from "@/lib/validate";
 import { ProviderCard as Card } from "./cards";
 import { useApp } from "./shell";
-import { Avatar, BackLink, Banner, Button, EmptyState, Field, LoadingBlock, Modal, PasswordField, Screen, TextInput, Verified } from "./ui";
+import { Gate, useFormGate } from "./form-gate";
+import { Avatar, BackLink, Banner, Button, EmptyState, Field, LoadingBlock, Modal, PhoneField, Screen, TextInput, Verified } from "./ui";
 
 function Row({ href, icon, label }: { href: string; icon: ReactNode; label: string }) {
   return (
@@ -80,6 +82,12 @@ export function CustomerProfile() {
 export function ProviderAccount() {
   const { me } = useApp();
   const provider = me.provider;
+  const [workPhotos, setWorkPhotos] = useState(false);
+  useEffect(() => {
+    api<{ categorySlug?: string }[]>("/api/provider/services")
+      .then((rows) => setWorkPhotos(rows.some((row) => row.categorySlug === "beauty-cosmetics")))
+      .catch(() => setWorkPhotos(false));
+  }, []);
   return (
     <Screen>
       <div className="flex items-center gap-3">
@@ -93,7 +101,7 @@ export function ProviderAccount() {
       </div>
       <div className="mt-5 divide-y divide-line overflow-hidden rounded-[24px] border border-line bg-card">
         <Row href="/provider/services" icon={<Settings size={18} />} label="Services & prices" />
-        <Row href="/provider/portfolio" icon={<Heart size={18} />} label="Work photos" />
+        {workPhotos && <Row href="/provider/portfolio" icon={<Heart size={18} />} label="Work photos" />}
         <Row href="/provider/availability" icon={<CalendarDays size={18} />} label="Availability" />
         <Row href="/provider/earnings" icon={<Wallet size={18} />} label="Earnings" />
         <Row href="/provider/reviews" icon={<Heart size={18} />} label="Reviews" />
@@ -111,6 +119,10 @@ export function AddressesScreen() {
   const [label, setLabel] = useState("Home");
   const [addressLine, setAddressLine] = useState("");
   const [error, setError] = useState("");
+  const gate = useFormGate([
+    { id: "label", message: requiredText(label, 40, "Enter a label for this address.", "Label") },
+    { id: "address", message: requiredText(addressLine, 160, "Enter the address.", "Address") },
+  ]);
   async function load() {
     setRows(await api("/api/addresses"));
   }
@@ -135,6 +147,7 @@ export function AddressesScreen() {
       </div>
       <form className="mt-5 space-y-3" onSubmit={async (event) => {
         event.preventDefault();
+        if (gate.blockSubmit()) return;
         try {
           await api("/api/addresses", { method: "POST", body: JSON.stringify({ label, addressLine }) });
           setAddressLine("");
@@ -143,8 +156,8 @@ export function AddressesScreen() {
           setError(err instanceof ApiError ? err.message : "Unable to save that address.");
         }
       }}>
-        <Field label="Label"><TextInput value={label} onChange={(event) => setLabel(event.target.value)} /></Field>
-        <Field label="Address"><TextInput value={addressLine} onChange={(event) => setAddressLine(event.target.value)} placeholder="Kabulonga, Lusaka" /></Field>
+        <Gate id="label" gate={gate}><Field label="Label" error={gate.error("label")}><TextInput value={label} onChange={(event) => setLabel(event.target.value)} {...gate.input("label")} /></Field></Gate>
+        <Gate id="address" gate={gate}><Field label="Address" error={gate.error("address")}><TextInput value={addressLine} onChange={(event) => setAddressLine(event.target.value)} placeholder="Kabulonga, Lusaka" {...gate.input("address")} /></Field></Gate>
         <Button type="submit">Save address</Button>
       </form>
     </Screen>
@@ -153,24 +166,25 @@ export function AddressesScreen() {
 
 export function PaymentsScreen() {
   const [rows, setRows] = useState<{ id: string; provider: string; phone: string; label: string }[] | null>(null);
-  const [provider, setProvider] = useState("MTN");
+  const [provider, setProvider] = useState("Airtel Money");
   const [phone, setPhone] = useState("");
   const [error, setError] = useState("");
+  const gate = useFormGate([{ id: "detail", message: provider === "Visa" ? visaLast4(phone) : phoneLocal(phone) }]);
   async function load() { setRows(await api("/api/payments")); }
   useEffect(() => { load().catch(() => setError("Unable to load payment methods.")); }, []);
   return (
     <Screen>
       <BackLink href="/customer/profile" />
       <h1 className="mt-3 font-display text-[1.8rem]">Payment methods</h1>
-      <p className="mt-1 text-sm text-muted">Mobile money details are saved for your records. ZamServe does not charge the wallet from this screen.</p>
+      <p className="mt-1 text-sm text-muted">Save Airtel Money, MoMo, or Visa to pay a provider from a booking.</p>
       {error && <div className="mt-3"><Banner>{error}</Banner></div>}
-      {rows?.length === 0 && <div className="mt-4"><EmptyState title="No payment methods" body="Add MTN, Airtel, or Zamtel mobile money." /></div>}
+      {rows?.length === 0 && <div className="mt-4"><EmptyState title="No payment methods" body="Add Airtel Money, MoMo, or Visa." /></div>}
       <div className="mt-4 space-y-2">
         {rows?.map((row) => (
           <div key={row.id} className="flex items-center justify-between rounded-[20px] border border-line bg-card p-3">
             <div>
               <p className="font-semibold">{row.provider}</p>
-              <p className="text-xs text-muted">{formatPhone(row.phone)}</p>
+              <p className="text-xs text-muted">{row.provider === "Visa" ? `•••• ${row.phone}` : formatPhone(row.phone)}</p>
             </div>
             <button className="text-xs font-semibold text-danger" onClick={async () => { await api(`/api/payments/${row.id}`, { method: "DELETE" }); load(); }}>Remove</button>
           </div>
@@ -178,6 +192,7 @@ export function PaymentsScreen() {
       </div>
       <form className="mt-5 space-y-3" onSubmit={async (event) => {
         event.preventDefault();
+        if (gate.blockSubmit()) return;
         try {
           await api("/api/payments", { method: "POST", body: JSON.stringify({ provider, phone }) });
           setPhone("");
@@ -188,12 +203,20 @@ export function PaymentsScreen() {
       }}>
         <Field label="Network">
           <select value={provider} onChange={(event) => setProvider(event.target.value)} className="h-12 w-full rounded-2xl border border-line bg-card px-4 text-sm">
-            <option>MTN</option>
-            <option>Airtel</option>
-            <option>Zamtel</option>
+            <option>Airtel Money</option>
+            <option>MoMo</option>
+            <option>Visa</option>
           </select>
         </Field>
-        <Field label="Phone number"><TextInput value={phone} onChange={(event) => setPhone(event.target.value)} placeholder="097..." /></Field>
+        <Gate id="detail" gate={gate}>
+          <Field label={provider === "Visa" ? "Last 4 digits" : "Phone number"} error={gate.error("detail")}>
+            {provider === "Visa" ? (
+              <TextInput value={phone} inputMode="numeric" onChange={(event) => setPhone(event.target.value.replace(/\D/g, "").slice(0, 4))} {...gate.input("detail")} />
+            ) : (
+              <PhoneField value={phone} onChange={setPhone} {...gate.input("detail")} />
+            )}
+          </Field>
+        </Gate>
         <Button type="submit">Save method</Button>
       </form>
     </Screen>
@@ -233,15 +256,35 @@ export function HelpScreen({ back }: { back: string }) {
 }
 
 export function SettingsScreen({ back }: { back: string }) {
+  const router = useRouter();
   const { me, refresh } = useApp();
   const [fullName, setFullName] = useState(me.fullName);
-  const [currentPassword, setCurrentPassword] = useState("");
-  const [newPassword, setNewPassword] = useState("");
+  const [photoError, setPhotoError] = useState("");
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const gate = useFormGate([
+    { id: "name", message: personName(fullName) },
+    { id: "photo", message: photoError },
+  ]);
+  const [theme, setTheme] = useState<"light" | "dark">("light");
+  const [deactivateOpen, setDeactivateOpen] = useState(false);
+  const [deactivating, setDeactivating] = useState(false);
+
+  useEffect(() => {
+    const saved = window.localStorage.getItem("zam-theme") === "dark" ? "dark" : "light";
+    setTheme(saved);
+  }, []);
+
+  function chooseTheme(next: "light" | "dark") {
+    setTheme(next);
+    if (next === "dark") document.documentElement.dataset.theme = "dark";
+    else delete document.documentElement.dataset.theme;
+    window.localStorage.setItem("zam-theme", next);
+  }
 
   async function saveProfile(event: React.FormEvent) {
     event.preventDefault();
+    if (gate.blockSubmit()) return;
     setError("");
     try {
       await api("/api/profile", { method: "PATCH", body: JSON.stringify({ fullName }) });
@@ -252,22 +295,28 @@ export function SettingsScreen({ back }: { back: string }) {
     }
   }
 
-  async function savePassword(event: React.FormEvent) {
-    event.preventDefault();
+  async function confirmDeactivate() {
+    setDeactivating(true);
     setError("");
     try {
-      const result = await api<{ message: string }>("/api/profile/password", { method: "POST", body: JSON.stringify({ currentPassword, newPassword }) });
-      setMessage(result.message);
-      setCurrentPassword("");
-      setNewPassword("");
+      await api("/api/profile/deactivate", { method: "POST" });
+      router.replace("/");
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Unable to change your password.");
+      setDeactivating(false);
+      setDeactivateOpen(false);
+      setError(err instanceof ApiError ? err.message : "Unable to deactivate this account.");
     }
   }
 
   async function photo(file?: File) {
     if (!file) return;
+    const problem = imageFileProblem(file);
+    if (problem) {
+      setPhotoError(problem);
+      return;
+    }
     try {
+      setPhotoError("");
       const avatarUrl = await uploadImage(file);
       await api("/api/profile", { method: "PATCH", body: JSON.stringify({ avatarUrl }) });
       await refresh();
@@ -283,15 +332,32 @@ export function SettingsScreen({ back }: { back: string }) {
       {message && <div className="mt-3"><Banner tone="success">{message}</Banner></div>}
       {error && <div className="mt-3"><Banner>{error}</Banner></div>}
       <form onSubmit={saveProfile} className="mt-4 space-y-3">
-        <Field label="Full name"><TextInput value={fullName} onChange={(event) => setFullName(event.target.value)} /></Field>
-        <Field label="Profile photo"><input type="file" accept="image/*" onChange={(event) => photo(event.target.files?.[0])} className="text-sm" /></Field>
+        <Gate id="name" gate={gate}><Field label="Full name" error={gate.error("name")}><TextInput value={fullName} onChange={(event) => setFullName(event.target.value)} {...gate.input("name")} /></Field></Gate>
+        <Gate id="photo" gate={gate}>
+          <Field label="Profile photo" error={photoError || gate.error("photo")}><input type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => { photo(event.target.files?.[0]); event.target.value = ""; }} className="text-sm" /></Field>
+        </Gate>
         <Button type="submit">Save profile</Button>
       </form>
-      <form onSubmit={savePassword} className="mt-6 space-y-3">
-        <Field label="Current password"><PasswordField value={currentPassword} onChange={(event) => setCurrentPassword(event.target.value)} /></Field>
-        <Field label="New password"><PasswordField value={newPassword} onChange={(event) => setNewPassword(event.target.value)} /></Field>
-        <Button type="submit" variant="ghost">Change password</Button>
-      </form>
+      <section className="mt-6 rounded-[22px] border border-line bg-card p-4">
+        <p className="text-sm font-semibold">Appearance</p>
+        <p className="mt-1 text-xs text-muted">Switch the app between light and dark.</p>
+        <div className="mt-3 grid grid-cols-2 gap-2">
+          <button type="button" onClick={() => chooseTheme("light")} className={`min-h-11 rounded-2xl border text-sm font-semibold ${theme === "light" ? "border-forest bg-sage text-forest" : "border-line bg-cream"}`}>Light</button>
+          <button type="button" onClick={() => chooseTheme("dark")} className={`min-h-11 rounded-2xl border text-sm font-semibold ${theme === "dark" ? "border-forest bg-sage text-forest" : "border-line bg-cream"}`}>Dark</button>
+        </div>
+      </section>
+      <section className="mt-4 rounded-[22px] border border-line bg-card p-4">
+        <p className="text-sm font-semibold">Deactivate account</p>
+        <p className="mt-1 text-xs text-muted">This signs you out. You will not be able to sign in again.</p>
+        <Button type="button" variant="danger" className="mt-3" onClick={() => setDeactivateOpen(true)}>Deactivate account</Button>
+      </section>
+      <Modal open={deactivateOpen} title="Deactivate account?" onClose={() => setDeactivateOpen(false)}>
+        <p className="text-sm text-muted">Are you sure you want to deactivate your account?</p>
+        <div className="mt-4 grid grid-cols-2 gap-2">
+          <Button variant="ghost" onClick={() => setDeactivateOpen(false)}>No</Button>
+          <Button variant="danger" loading={deactivating} onClick={confirmDeactivate}>Yes</Button>
+        </div>
+      </Modal>
     </Screen>
   );
 }

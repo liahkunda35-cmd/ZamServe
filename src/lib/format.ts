@@ -2,6 +2,20 @@ export function kwacha(amount: number) {
   return `K${Math.round(amount).toLocaleString("en-US")}`;
 }
 
+export function splitDuration(totalMinutes: number) {
+  const safe = Math.max(0, Math.round(totalMinutes));
+  return { hours: Math.floor(safe / 60), minutes: safe % 60 };
+}
+
+export function formatDuration(totalMinutes: number) {
+  const { hours, minutes } = splitDuration(totalMinutes);
+  const hourLabel = `${hours} hour${hours === 1 ? "" : "s"}`;
+  const minuteLabel = `${minutes} minute${minutes === 1 ? "" : "s"}`;
+  if (hours === 0) return minuteLabel;
+  if (minutes === 0) return hourLabel;
+  return `${hourLabel} ${minuteLabel}`;
+}
+
 export function todayInLusaka(date = new Date()) {
   return new Intl.DateTimeFormat("en-CA", {
     timeZone: "Africa/Lusaka",
@@ -21,15 +35,9 @@ export function timeInLusaka(date = new Date()) {
 }
 
 export function greeting(date = new Date()) {
-  const hour = Number(
-    new Intl.DateTimeFormat("en-GB", {
-      timeZone: "Africa/Lusaka",
-      hour: "2-digit",
-      hourCycle: "h23",
-    }).format(date),
-  );
+  const hour = date.getHours();
   if (hour < 12) return "Good morning";
-  if (hour < 17) return "Good afternoon";
+  if (hour < 18) return "Good afternoon";
   return "Good evening";
 }
 

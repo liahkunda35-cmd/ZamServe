@@ -5,9 +5,11 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { FormEvent, useEffect, useState } from "react";
 import { Heart, MapPin, Search } from "lucide-react";
 import { ApiError, api } from "@/lib/client";
-import { kwacha, weekdayName } from "@/lib/format";
+import { formatDuration, kwacha, weekdayName } from "@/lib/format";
+import { searchQuery } from "@/lib/validate";
 import type { Category, ProviderCard, ServiceItem } from "@/lib/types";
 import { CategoryIcon, ProviderCard as Card } from "./cards";
+import { Gate, useFormGate } from "./form-gate";
 import { Avatar, BackLink, Banner, Button, EmptyState, LoadingBlock, Screen, SectionTitle, Stars, Verified } from "./ui";
 
 export function CategoriesScreen() {
@@ -25,7 +27,7 @@ export function CategoriesScreen() {
       {!categories && !error && <div className="mt-4"><LoadingBlock label="Loading categories..." /></div>}
       <div className="mt-4 space-y-3">
         {categories?.map((category) => (
-          <Link key={category.id} href={`/customer/categories/${category.slug}`} className="press relative block h-36 overflow-hidden rounded-[24px]">
+          <Link key={category.id} href={`/customer/categories/${category.slug}`} className="press relative block h-36 overflow-hidden rounded-[24px] ring-2 ring-sage-line">
             {category.imageUrl && <img src={category.imageUrl} alt="" className="h-full w-full object-cover" />}
             <div className="absolute inset-0 bg-gradient-to-r from-ink/75 to-ink/10" />
             <div className="absolute inset-0 flex items-end p-4 text-white">
@@ -112,6 +114,7 @@ export function SearchScreen() {
   const initial = params.get("q") ?? "";
   const service = params.get("service") ?? "";
   const [query, setQuery] = useState(initial);
+  const searchGate = useFormGate([{ id: "q", message: searchQuery(query) }]);
   const [providers, setProviders] = useState<ProviderCard[] | null>(null);
   const [services, setServices] = useState<ServiceItem[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
@@ -144,7 +147,8 @@ export function SearchScreen() {
 
   function onSubmit(event: FormEvent) {
     event.preventDefault();
-    router.push(`/customer/search?q=${encodeURIComponent(query)}`);
+    if (searchGate.blockSubmit()) return;
+    router.push(`/customer/search?q=${encodeURIComponent(query.trim())}`);
   }
 
   const title = service ? service.replace(/-/g, " ") : initial ? `Results for “${initial}”` : "Search";
@@ -152,9 +156,14 @@ export function SearchScreen() {
   return (
     <Screen>
       <BackLink href="/customer/home" />
-      <form onSubmit={onSubmit} className="mt-3 flex h-12 items-center gap-2 rounded-full border border-line bg-card px-4">
-        <Search size={16} className="text-muted" />
-        <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Haircut, phone repair, cleaning..." className="w-full bg-transparent text-sm outline-none" />
+      <form onSubmit={onSubmit} className="mt-3">
+        <Gate id="q" gate={searchGate}>
+          <div className="flex h-12 items-center gap-2 rounded-full border border-line bg-card px-4 focus-within:border-forest">
+            <Search size={16} className="text-forest" />
+            <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Haircut, phone repair, cleaning..." className="w-full bg-transparent text-sm outline-none" {...searchGate.input("q")} />
+          </div>
+          {searchGate.error("q") && <span className="mt-1 block px-4 text-xs text-danger">{searchGate.error("q")}</span>}
+        </Gate>
       </form>
       <h1 className="mt-4 font-display text-[1.7rem] capitalize">{title}</h1>
       {error && <div className="mt-4"><Banner>{error}</Banner></div>}
@@ -271,10 +280,10 @@ export function PublicProvider({ id }: { id: string }) {
               <SectionTitle title="Services" />
               <div className="space-y-2">
                 {provider.services.map((service) => (
-                  <button key={service.id} onClick={() => setSelected(service.id)} className={`flex w-full items-center justify-between rounded-[20px] border px-4 py-3 text-left ${selected === service.id ? "border-brown bg-gold-soft/40" : "border-line bg-card"}`}>
+                  <button key={service.id} onClick={() => setSelected(service.id)} className={`flex w-full items-center justify-between rounded-[20px] border px-4 py-3 text-left ${selected === service.id ? "border-forest bg-sage" : "border-line bg-card"}`}>
                     <span>
                       <span className="block font-semibold">{service.name}</span>
-                      <span className="text-xs text-muted">{service.category} · {service.durationMinutes} min</span>
+                      <span className="text-xs text-muted">{service.category} · {formatDuration(service.durationMinutes)}</span>
                     </span>
                     <span className="font-semibold text-brown">{kwacha(service.price)}</span>
                   </button>

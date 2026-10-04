@@ -11,7 +11,7 @@ export function AppHeader() {
   return (
     <div className={welcome
       ? "absolute inset-x-0 top-0 z-20 flex items-center justify-between gap-2 px-4 pb-2 pt-[max(0.45rem,env(safe-area-inset-top))]"
-      : "flex shrink-0 items-center justify-between gap-2 bg-[#f7f2ea] px-4 pb-2 pt-[max(0.45rem,env(safe-area-inset-top))]"}>
+      : "flex shrink-0 items-center justify-between gap-2 bg-cream px-4 pb-2 pt-[max(0.45rem,env(safe-area-inset-top))]"}>
       <BrandLogo compact />
       {welcome && (
         <div className="flex shrink-0 items-center gap-1.5">

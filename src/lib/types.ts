@@ -99,7 +99,8 @@ export type Booking = {
   providerLocationAt: string | null;
   completedAt: string | null;
   createdAt: string;
-  service: { id: string; name: string; slug: string; category: string };
+  durationMinutes: number;
+  service: { id: string; name: string; slug: string; category: string; categorySlug: string };
   provider: {
     id: string;
     name: string;

@@ -1,6 +1,6 @@
 export const STATUS_LABEL: Record<string, string> = {
   PENDING: "Pending",
-  ACCEPTED: "Confirmed",
+  ACCEPTED: "Accepted",
   ON_THE_WAY: "On the way",
   ARRIVED: "Arrived",
   IN_PROGRESS: "In progress",
